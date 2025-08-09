@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Retro FM Radio – Singapore</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Shrikhand&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <button id="themeToggle" class="theme-toggle" aria-pressed="false" aria-label="Toggle dark mode">
+          <span class="sun" aria-hidden="true">☀</span>
+          <span class="moon" aria-hidden="true">🌙</span>
+        </button>
+        <h1 class="title">Retro FM Radio</h1>
+        <div class="subtitle">Singapore stations • 87.5–108.0 MHz</div>
+      </header>
+
+      <main class="radio-wrap">
+        <section class="radio" aria-label="Retro FM radio">
+          <div class="radio-top">
+            <button class="power" id="powerBtn" aria-pressed="false" aria-label="Power">
+              <span class="led" id="powerLed" aria-hidden="true"></span>
+              <span class="power-label">Power</span>
+            </button>
+
+            <div class="screen" aria-live="polite">
+              <div class="freq-readout">
+                <span id="freqValue">95.0</span>
+                <span class="unit">MHz</span>
+              </div>
+              <div class="station-readout" id="stationReadout">—</div>
+            </div>
+
+            <div class="knob-group">
+              <label class="knob-label" for="volume">Volume</label>
+              <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7" />
+            </div>
+          </div>
+
+          <!-- Dial removed for preset-only selection -->
+
+          <!-- Tasteful disco ball below the display -->
+          <div class="ball-wrap" aria-hidden="true">
+            <div class="disco-ball">
+              <div class="tiles"></div>
+              <div class="glint"></div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button id="playPause" class="btn" disabled>Play</button>
+            <button id="muteBtn" class="btn" disabled>Mute</button>
+          </div>
+
+          <div class="visualizer" aria-hidden="true">
+            <canvas id="vizCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="station-list" aria-label="Station presets">
+          <h2>Presets</h2>
+          <ul id="presetList" class="presets"></ul>
+          <p class="hint">Tip: Click a preset to tune. If a stream is blocked by region/CORS, try another station.</p>
+        </section>
+      </main>
+
+      <audio id="audio" crossorigin="anonymous"></audio>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

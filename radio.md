@@ -1,0 +1,1 @@
+implement this radio website. the radio should look like a retro 70s look. white background. the user can adjust it and it will change the fm radio on screen. the radio will be taken from singapore only for now. ask me questions if you need additional clarification.
