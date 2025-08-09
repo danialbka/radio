@@ -3,6 +3,7 @@
 const audio = document.getElementById('audio');
 const freqValue = document.getElementById('freqValue');
 const stationReadout = document.getElementById('stationReadout');
+const songTitleEl = document.getElementById('songTitle');
 const volume = document.getElementById('volume');
 const powerBtn = document.getElementById('powerBtn');
 const powerLed = document.getElementById('powerLed');
@@ -179,6 +180,7 @@ const stations = [
     name: 'CLASS 95',
     freqMHz: 95.0,
     city: 'Singapore',
+    nowPlayingId: 'CLASS95',
     urls: [
       'https://playerservices.streamtheworld.com/api/livestream-redirect/CLASS95AAC_SC',
       'https://playerservices.streamtheworld.com/api/livestream-redirect/CLASS95.mp3'
@@ -188,6 +190,7 @@ const stations = [
     name: 'GOLD 905',
     freqMHz: 90.5,
     city: 'Singapore',
+    nowPlayingId: 'GOLD905',
     urls: [
       'https://playerservices.streamtheworld.com/api/livestream-redirect/GOLD905AAC_SC',
       'https://playerservices.streamtheworld.com/api/livestream-redirect/GOLD905.mp3'
@@ -197,6 +200,7 @@ const stations = [
     name: 'YES 933',
     freqMHz: 93.3,
     city: 'Singapore',
+    nowPlayingId: 'YES933',
     urls: [
       'https://playerservices.streamtheworld.com/api/livestream-redirect/YES933AAC_SC',
       'https://playerservices.streamtheworld.com/api/livestream-redirect/YES933.mp3'
@@ -206,6 +210,7 @@ const stations = [
     name: '987FM',
     freqMHz: 98.7,
     city: 'Singapore',
+    nowPlayingId: '987FM',
     urls: [
       'https://playerservices.streamtheworld.com/api/livestream-redirect/987FMAAC_SC',
       'https://playerservices.streamtheworld.com/api/livestream-redirect/987FM.mp3'
@@ -215,6 +220,7 @@ const stations = [
     name: '88.3JIA',
     freqMHz: 88.3,
     city: 'Singapore',
+    nowPlayingId: '883JIA',
     urls: [
       'https://playerservices.streamtheworld.com/api/livestream-redirect/883JIAAAC_SC',
       'https://playerservices.streamtheworld.com/api/livestream-redirect/883JIA.mp3'
@@ -253,6 +259,8 @@ let poweredOn = false;
 let currentStationIndex = -1;
 let currentUrlIndex = 0;
 let availabilityTimeout = null;
+let nowPlayingTimer = null;
+let nowPlayingAbort = null;
 
 function clearAvailabilityTimeout() {
   if (availabilityTimeout) {
@@ -268,10 +276,67 @@ function setPower(state) {
   muteBtn.disabled = !state;
   if (!state) {
     clearAvailabilityTimeout();
+    stopNowPlayingPoll();
+    setSongTitle('');
     fadeOutAndPause().finally(() => {
       playPause.textContent = 'Play';
     });
   }
+}
+
+function setSongTitle(text) {
+  if (!songTitleEl) return;
+  const val = (text || '').trim();
+  songTitleEl.textContent = val || '—';
+}
+
+function stopNowPlayingPoll() {
+  if (nowPlayingTimer) {
+    clearInterval(nowPlayingTimer);
+    nowPlayingTimer = null;
+  }
+  if (nowPlayingAbort) {
+    try { nowPlayingAbort.abort(); } catch (_) {}
+    nowPlayingAbort = null;
+  }
+}
+
+function startNowPlayingPoll(station) {
+  stopNowPlayingPoll();
+  if (!station || !station.nowPlayingId) {
+    setSongTitle('');
+    return;
+  }
+  setSongTitle('');
+  const controller = new AbortController();
+  nowPlayingAbort = controller;
+
+  const fetchOnce = async () => {
+    try {
+      const resp = await fetch(`/api/nowplaying?station=${encodeURIComponent(station.nowPlayingId)}`,
+        { cache: 'no-store', signal: controller.signal }
+      );
+      if (resp.status === 204) {
+        setSongTitle('');
+        return;
+      }
+      if (resp.ok) {
+        const ct = resp.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await resp.json();
+          setSongTitle(data && data.title ? data.title : '');
+        }
+      } else {
+        setSongTitle('');
+      }
+    } catch (_) {
+      // ignore errors; keep last title
+    }
+  };
+
+  // Initial fetch and then poll every 30s
+  fetchOnce();
+  nowPlayingTimer = setInterval(fetchOnce, 30000);
 }
 
 async function tryPlayStation(station) {
@@ -329,6 +394,10 @@ async function tuneTo(freq, snap = true) {
     } catch (_) { /* ignore */ }
   })();
 
+  // Change in station — stop old polling
+  stopNowPlayingPoll();
+  setSongTitle('');
+
   const { station } = getNearestStation(freq);
   if (!station) return;
 
@@ -350,6 +419,8 @@ async function tuneTo(freq, snap = true) {
     playPause.textContent = 'Pause';
     document.body.classList.add('playing');
     try { initAudioGraph(); if (audioCtx.state === 'suspended') audioCtx.resume(); startVisualizer(); } catch(_) {}
+    // Begin now playing polling
+    startNowPlayingPoll(station);
   }
 
   // Only mark unavailable after a short delay if still not playing
@@ -429,6 +500,8 @@ playPause.addEventListener('click', async () => {
     } finally {
       playPause.textContent = 'Play';
       document.body.classList.remove('playing');
+      stopNowPlayingPoll();
+      setSongTitle('');
       // let the visualizer linger slightly for a smoother stop
       setTimeout(() => stopVisualizer(), 300);
     }

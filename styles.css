@@ -174,6 +174,7 @@ body.playing::before { opacity: 0.75; }
 }
 .freq-readout .unit { font-family: 'Inter'; font-weight: 600; color: var(--muted); font-size: 14px; }
 .station-readout { color: var(--accent-2); font-weight: 600; min-height: 20px; }
+.song-title { color: var(--muted); font-size: 13px; min-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .knob-group { text-align: center; }
 .knob-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
