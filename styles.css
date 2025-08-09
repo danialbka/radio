@@ -22,7 +22,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
+html, body { height: 100%; overflow-x: hidden; }
 
 body {
   margin: 0;
@@ -70,9 +70,9 @@ body.playing::before { opacity: 0.75; }
   position: relative;
   z-index: 1; /* above disco background */
   max-width: 1600px;
-  min-height: 100vh;
+  min-height: 100svh;
   margin: 0 auto;
-  padding: 28px 28px 48px;
+  padding: 28px 28px 24px;
 }
 
 .header { text-align: center; margin-bottom: 24px; position: relative; }
@@ -105,7 +105,6 @@ body.playing::before { opacity: 0.75; }
   grid-template-columns: 2.2fr 1fr;
   gap: 36px;
   align-items: stretch;
-  min-height: calc(100vh - 160px);
 }
 
 @media (max-width: 900px) {
