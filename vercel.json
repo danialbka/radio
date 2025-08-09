@@ -1,12 +1,7 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
-  "functions": {
-    "api/nowplaying.js": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 10
-    }
-  },
+  
   "headers": [
     {
       "source": "/(.*)\\.(css|js|svg)",
