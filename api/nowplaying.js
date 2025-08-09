@@ -21,7 +21,7 @@ function getUrlForStation(id) {
   return STATION_URLS[id];
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   try {
     const { station } = req.query;
     const url = getUrlForStation(String(station || '').toUpperCase());
@@ -42,13 +42,20 @@ module.exports = async function handler(req, res) {
   }
 }
 
+module.exports = handler;
+module.exports.default = handler;
+
 function fetchIcyTitle(url, redirects = 0) {
   return new Promise((resolve) => {
     const client = url.startsWith('https') ? https : http;
     const req = client.get(url, {
       headers: {
         'Icy-MetaData': '1',
-        'User-Agent': 'Mozilla/5.0'
+        'User-Agent': 'Mozilla/5.0 (RadioNowPlaying/1.0) AppleWebKit/537.36',
+        'Accept': '*/*',
+        'Pragma': 'no-cache',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
       }
     }, (resp) => {
       // Follow up to 3 redirects
