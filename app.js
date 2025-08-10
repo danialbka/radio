@@ -39,7 +39,7 @@ let vizPauseBlend = 0; // 0 = live, 1 = fully idle
 let vizTargetBlend = 0;
 const nowHistory = [];
 const lastNowTitleByStation = {};
-const MAX_HISTORY = 12;
+const MAX_HISTORY = 6;
 
 function formatTimeHM(date) {
   try {
