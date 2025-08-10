@@ -421,3 +421,57 @@ body.playing::before { opacity: 0.75; }
 .presets button:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(0,0,0,0.08), inset 0 2px 8px rgba(0,0,0,0.08); }
 .presets button .meta { display: block; font-size: 12px; color: var(--muted); font-weight: 500; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+/* Now Playing history bar */
+.now-bar {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 2px solid var(--bezel);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+.now-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.now-cards li {
+  background: var(--bg);
+  border: 2px solid var(--bezel);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-height: 64px;
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: center;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08), inset 0 3px 10px rgba(0,0,0,0.05);
+}
+.now-station {
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.now-title {
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.now-time {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .now-cards { grid-auto-columns: minmax(70%, 1fr); }
+}
