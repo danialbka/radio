@@ -39,10 +39,7 @@
               <div class="song-title" id="songTitle">—</div>
             </div>
 
-            <div class="knob-group">
-              <label class="knob-label" for="volume">Volume</label>
-              <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7" />
-            </div>
+            
           </div>
 
           <!-- Dial removed for preset-only selection -->
@@ -56,6 +53,20 @@
           </div>
 
           <div class="controls">
+            <div class="viz-style">
+              <label for="vizStyle" class="viz-label">Visualizer</label>
+              <select id="vizStyle" class="viz-select" aria-label="Select visualizer style">
+                <option value="dots">Dot Matrix</option>
+                <option value="bars">Bars</option>
+                <option value="wave">Waveform</option>
+                <option value="radial">Radial</option>
+              </select>
+            </div>
+            <div class="volume" role="group" aria-label="Volume">
+              <label for="volume" class="sr-only">Volume</label>
+              <span class="volume-icon" aria-hidden="true">🔊</span>
+              <input type="range" id="volume" class="volume-slider" min="0" max="1" step="0.01" value="0.7" />
+            </div>
             <button id="playPause" class="btn" disabled>Play</button>
             <button id="muteBtn" class="btn" disabled>Mute</button>
           </div>
@@ -77,4 +88,18 @@
 
     <script src="app.js"></script>
   </body>
+  <!-- SVG filters for smoke-like background displacement -->
+  <svg width="0" height="0" style="position:absolute; left:-9999px; top:-9999px;">
+    <defs>
+      <filter id="smokeDisplace">
+        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="3" seed="7" result="noise">
+          <animate attributeName="baseFrequency" dur="60s" values="0.006 0.009;0.004 0.006;0.006 0.009" repeatCount="indefinite"/>
+          <animate attributeName="seed" dur="30s" values="5;9;5" repeatCount="indefinite"/>
+        </feTurbulence>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="60" xChannelSelector="R" yChannelSelector="G">
+          <animate attributeName="scale" dur="50s" values="40;65;40" repeatCount="indefinite"/>
+        </feDisplacementMap>
+      </filter>
+    </defs>
+  </svg>
 </html>
