@@ -12,12 +12,13 @@ const muteBtn = document.getElementById('muteBtn');
 const presetList = document.getElementById('presetList');
 const themeToggle = document.getElementById('themeToggle');
 const vizStyleSelect = document.getElementById('vizStyle');
+const historyList = document.getElementById('historyList');
 // No tuner controls: channels selected via preset buttons only
 // Background disco lights toggle based on audio state
-audio.addEventListener('playing', () => document.body.classList.add('playing'));
-audio.addEventListener('pause', () => document.body.classList.remove('playing'));
-audio.addEventListener('ended', () => document.body.classList.remove('playing'));
-audio.addEventListener('stalled', () => document.body.classList.remove('playing'));
+audio.addEventListener('playing', () => { document.body.classList.add('playing'); vizPausedMode = false; vizTargetBlend = 0; });
+audio.addEventListener('pause', () => { document.body.classList.remove('playing'); vizPausedMode = true; vizTargetBlend = 1; });
+audio.addEventListener('ended', () => { document.body.classList.remove('playing'); vizPausedMode = true; vizTargetBlend = 1; });
+audio.addEventListener('stalled', () => { document.body.classList.remove('playing'); vizPausedMode = true; vizTargetBlend = 1; });
 
 // Pixel visualizer setup
 let audioCtx = null;
@@ -31,6 +32,57 @@ let currentVizStyle = 'dots';
 let vizTick = 0;
 let rotationPhase = 0;
 const barPeaks = [];
+let vizPausedMode = false;
+let idlePhase1 = 0;
+let idlePhase2 = 0;
+let vizPauseBlend = 0; // 0 = live, 1 = fully idle
+let vizTargetBlend = 0;
+const nowHistory = [];
+const lastNowTitleByStation = {};
+const MAX_HISTORY = 6;
+
+function formatTimeHM(date) {
+  try {
+    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
+  } catch (_) {
+    const h = String(date.getHours()).padStart(2, '0');
+    const m = String(date.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+}
+
+function renderHistory() {
+  if (!historyList) return;
+  historyList.innerHTML = '';
+  for (const entry of nowHistory) {
+    const li = document.createElement('li');
+    const stationEl = document.createElement('div');
+    stationEl.className = 'now-station';
+    stationEl.textContent = entry.station;
+    const titleEl = document.createElement('div');
+    titleEl.className = 'now-title';
+    titleEl.textContent = entry.title;
+    const timeEl = document.createElement('div');
+    timeEl.className = 'now-time';
+    timeEl.textContent = formatTimeHM(new Date(entry.ts));
+    li.appendChild(stationEl);
+    li.appendChild(titleEl);
+    li.appendChild(timeEl);
+    historyList.appendChild(li);
+  }
+}
+
+function pushNowPlayingEntry(stationName, title) {
+  const safeTitle = (title || '').trim();
+  if (!safeTitle) return;
+  if (lastNowTitleByStation[stationName] === safeTitle) return;
+  lastNowTitleByStation[stationName] = safeTitle;
+  const last = nowHistory[0];
+  if (last && last.title === safeTitle && last.station === stationName) return;
+  nowHistory.unshift({ station: stationName, title: safeTitle, ts: Date.now() });
+  if (nowHistory.length > MAX_HISTORY) nowHistory.length = MAX_HISTORY;
+  renderHistory();
+}
 
 function initAudioGraph() {
   if (!audioCtx) {
@@ -76,37 +128,71 @@ function startVisualizer() {
     vizRAF = requestAnimationFrame(draw);
     analyser.getByteFrequencyData(freqArray);
     analyser.getByteTimeDomainData(timeArray);
+
+    // Progress blend toward target for smooth crossfade between live and idle states
+    vizPauseBlend += (vizTargetBlend - vizPauseBlend) * 0.06;
+    if (vizPauseBlend < 0.0001) vizPauseBlend = 0; if (vizPauseBlend > 0.999) vizPauseBlend = 1;
+
+    // Build idle waveforms
+    const idleFreq = new Float32Array(freqBins);
+    const idleTime = new Float32Array(timeArray.length);
+    for (let i = 0; i < freqBins; i++) {
+      idleFreq[i] = 22
+        + 18 * Math.sin(idlePhase1 + i * 0.06)
+        + 10 * Math.sin(idlePhase2 + i * 0.027);
+    }
+    for (let i = 0; i < idleTime.length; i++) {
+      idleTime[i] = 128
+        + 40 * Math.sin(idlePhase1 + i * 0.025)
+        + 22 * Math.sin(idlePhase2 + i * 0.012);
+    }
+
+    // Mix live and idle
+    const mixedFreq = new Float32Array(freqBins);
+    const mixedTime = new Float32Array(timeArray.length);
+    const blend = vizPauseBlend;
+    const invBlend = 1 - blend;
+    for (let i = 0; i < freqBins; i++) mixedFreq[i] = freqArray[i] * invBlend + idleFreq[i] * blend;
+    for (let i = 0; i < mixedTime.length; i++) mixedTime[i] = timeArray[i] * invBlend + idleTime[i] * blend;
     const rect = vizCanvas.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
-    // subtle trail
-    vizCtx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.35)';
+    // subtle trail, slightly stronger when live
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const liveTrail = isDark ? 0.12 : 0.18;
+    const idleTrail = isDark ? 0.08 : 0.12;
+    const trail = liveTrail * invBlend + idleTrail * blend;
+    vizCtx.fillStyle = isDark ? `rgba(0,0,0,${trail})` : `rgba(255,255,255,${trail})`;
     vizCtx.fillRect(0, 0, width, height);
 
     vizTick += 1;
-    rotationPhase += 0.0035; // for radial mode
+    const rotScale = 1 - 0.8 * blend;
+    rotationPhase += 0.0035 * rotScale; // for radial mode
+    idlePhase1 += 0.008 + 0.012 * invBlend; // 0.02 live -> 0.008 idle
+    idlePhase2 += 0.004 + 0.008 * invBlend; // 0.012 live -> 0.004 idle
 
-    const decay = 0.02;
+    const decay = 0.01 * blend + 0.02 * invBlend;
 
     // Compute effective usable frequency range by spectral rolloff
     let totalEnergy = 0;
-    for (let i = 0; i < freqBins; i++) totalEnergy += freqArray[i];
+    for (let i = 0; i < freqBins; i++) totalEnergy += mixedFreq[i];
     let rolloffTarget = Math.floor(freqBins * 0.85);
     if (totalEnergy > 0) {
       const targetEnergy = totalEnergy * 0.985; // 98.5% rolloff
       let accum = 0;
       let idx = 0;
       for (; idx < freqBins; idx++) {
-        accum += freqArray[idx];
+        accum += mixedFreq[idx];
         if (accum >= targetEnergy) break;
       }
       rolloffTarget = idx;
     }
     const minUsed = Math.floor(freqBins * 0.55);
     const maxUsed = freqBins;
-    const targetUsed = Math.max(minUsed, Math.min(maxUsed, rolloffTarget));
+    const idleUsed = Math.floor(freqBins * 0.8);
+    const targetUsed = Math.round(Math.max(minUsed, Math.min(maxUsed, rolloffTarget)) * invBlend + idleUsed * blend);
     usedBinsSmoothed = Math.round(usedBinsSmoothed * 0.9 + targetUsed * 0.1);
-    const usedBins = Math.max(minUsed, Math.min(maxUsed, usedBinsSmoothed));
+    let usedBins = Math.max(minUsed, Math.min(maxUsed, usedBinsSmoothed));
 
     if (currentVizStyle === 'bars') {
       const bars = Math.max(36, Math.floor(width / 12));
@@ -121,7 +207,7 @@ function startVisualizer() {
         let sum = 0;
         const start = b * step;
         const end = Math.min(usedBins, start + step);
-        for (let i = start; i < end; i++) sum += freqArray[i];
+        for (let i = start; i < end; i++) sum += mixedFreq[i];
         const v = (sum / ((end - start) || 1)) / 255; // 0..1
         levels[b] = Math.max(v, Math.max(0, levels[b] - decay));
 
@@ -137,8 +223,9 @@ function startVisualizer() {
         const r = Math.min(8, w * 0.35);
         // glow
         vizCtx.save();
-        vizCtx.shadowBlur = 10;
-        vizCtx.shadowColor = `hsla(${hue}, 95%, 65%, 0.75)`;
+        vizCtx.shadowBlur = 10 * invBlend + 6 * blend;
+        const glowA = 0.75 * invBlend + 0.35 * blend;
+        vizCtx.shadowColor = `hsla(${hue}, 95%, 65%, ${glowA})`;
         vizCtx.beginPath();
         vizCtx.moveTo(x + r, y);
         vizCtx.lineTo(x + w - r, y);
@@ -152,7 +239,8 @@ function startVisualizer() {
         vizCtx.restore();
 
         // peak caps with gentle fall
-        barPeaks[b] = Math.max(barPeaks[b] - 0.01, levels[b]);
+        const peakFall = 0.01 * invBlend + 0.003 * blend;
+        barPeaks[b] = Math.max(barPeaks[b] - peakFall, levels[b]);
         const peakY = height - barPeaks[b] * height * 0.9;
         vizCtx.fillStyle = `hsla(${hue}, 95%, 85%, 0.9)`;
         vizCtx.fillRect(x, Math.max(0, peakY - 3), w, 3);
@@ -166,20 +254,23 @@ function startVisualizer() {
       const layers = 3;
       for (let l = 0; l < layers; l++) {
         const tOff = l * 0.06;
-        vizCtx.lineWidth = Math.max(1.5, Math.min(3.5, width / 520)) + l * 0.75;
+        vizCtx.lineWidth = (Math.max(1.2, Math.min(3, width / 520)) + l * 0.75) * (1 - 0.4 * blend);
         const grad = vizCtx.createLinearGradient(0, 0, width, 0);
         grad.addColorStop(0, colorA);
         grad.addColorStop(1, colorB);
         vizCtx.strokeStyle = grad;
-        vizCtx.shadowBlur = 12;
-        vizCtx.shadowColor = 'rgba(255, 180, 120, 0.55)';
+        vizCtx.shadowBlur = 12 * invBlend + 6 * blend;
+        const waveGlow = 0.55 * invBlend + 0.35 * blend;
+        vizCtx.shadowColor = `rgba(255, 180, 120, ${waveGlow})`;
         vizCtx.beginPath();
         const midY = height * (0.52 + l * 0.03);
         const amp = height * (0.28 - l * 0.06);
-        for (let i = 0; i < timeArray.length; i++) {
-          const t = (timeArray[i] - 128) / 128; // -1..1
+        const waveSpeed = 0.08 * invBlend + 0.02 * blend;
+        const waveAmpAdj = 1 * invBlend + 0.5 * blend; // halve extra oscillation when idle
+        for (let i = 0; i < mixedTime.length; i++) {
+          const t = (mixedTime[i] - 128) / 128; // -1..1
           const x = (i / (timeArray.length - 1)) * width;
-          const y = midY + t * amp + Math.sin(x * 0.02 + vizTick * 0.08 + tOff) * 2;
+          const y = midY + t * amp + Math.sin(x * 0.02 + vizTick * waveSpeed + tOff) * waveAmpAdj;
           if (i === 0) vizCtx.moveTo(x, y); else vizCtx.lineTo(x, y);
         }
         vizCtx.stroke();
@@ -202,7 +293,7 @@ function startVisualizer() {
         let sum = 0;
         const start = s * step;
         const end = Math.min(usedBins, start + step);
-        for (let i = start; i < end; i++) sum += freqArray[i];
+        for (let i = start; i < end; i++) sum += mixedFreq[i];
         const v = (sum / ((end - start) || 1)) / 255; // 0..1
         levels[s] = Math.max(v, Math.max(0, levels[s] - decay));
 
@@ -210,9 +301,10 @@ function startVisualizer() {
         const len = baseR + levels[s] * Math.min(width, height) * 0.32;
         const hue = (28 + levels[s] * 200 + vizTick * 0.6) % 360;
         vizCtx.strokeStyle = `hsla(${hue}, 95%, 65%, 0.95)`;
-        vizCtx.lineWidth = 2.2;
-        vizCtx.shadowBlur = 14;
-        vizCtx.shadowColor = `hsla(${hue}, 95%, 65%, 0.75)`;
+        vizCtx.lineWidth = 2.2 * invBlend + 1.6 * blend;
+        vizCtx.shadowBlur = 14 * invBlend + 8 * blend;
+        const radialGlow = 0.75 * invBlend + 0.4 * blend;
+        vizCtx.shadowColor = `hsla(${hue}, 95%, 65%, ${radialGlow})`;
         vizCtx.beginPath();
         vizCtx.moveTo(cx + Math.cos(angle) * baseR, cy + Math.sin(angle) * baseR);
         vizCtx.lineTo(cx + Math.cos(angle) * len, cy + Math.sin(angle) * len);
@@ -244,7 +336,7 @@ function startVisualizer() {
       let sum = 0;
       const start = c * sampleStep;
       const end = Math.min(usedBins, start + sampleStep);
-      for (let i = start; i < end; i++) sum += freqArray[i];
+      for (let i = start; i < end; i++) sum += mixedFreq[i];
       const v = (sum / ((end - start) || 1)) / 255; // 0..1
       levels[c] = Math.max(v, Math.max(0, levels[c] - decay));
 
@@ -255,14 +347,14 @@ function startVisualizer() {
         const dy = height - (r * cellH + cellH / 2);
         const isOn = r < lit;
         const rel = isOn ? 1 - (r / Math.max(1, lit)) : 0;
-        const alpha = isOn ? 0.35 + 0.6 * Math.pow(rel, 0.8) : 0.06;
-        const lightness = isOn ? 60 : 85;
+        const alpha = isOn ? (0.35 * invBlend + 0.22 * blend) + 0.6 * Math.pow(rel, 0.8) : 0.05;
+        const lightness = isOn ? (60 * invBlend + 58 * blend) : 85;
         vizCtx.fillStyle = `hsla(${hue}, 95%, ${lightness}%, ${alpha})`;
         vizCtx.save();
         if (isOn) {
           const glowAlpha = Math.min(0.75, alpha + 0.25);
-          vizCtx.shadowBlur = Math.max(8, radius * 1.8);
-          vizCtx.shadowColor = `hsla(${hue}, 95%, 65%, ${glowAlpha})`;
+          vizCtx.shadowBlur = Math.max(6, radius * (1.8 * invBlend + 1.4 * blend));
+          vizCtx.shadowColor = `hsla(${hue}, 95%, 65%, ${glowAlpha * (invBlend + 0.6 * blend)})`;
         } else {
           vizCtx.shadowBlur = 0;
         }
@@ -479,7 +571,9 @@ function startNowPlayingPoll(station) {
         const ct = resp.headers.get('content-type') || '';
         if (ct.includes('application/json')) {
           const data = await resp.json();
-          setSongTitle(data && data.title ? data.title : '');
+          const title = data && data.title ? data.title : '';
+          setSongTitle(title);
+          if (title) pushNowPlayingEntry(station.name, title);
         }
       } else {
         setSongTitle('');
@@ -657,8 +751,7 @@ playPause.addEventListener('click', async () => {
       document.body.classList.remove('playing');
       stopNowPlayingPoll();
       setSongTitle('');
-      // let the visualizer linger slightly for a smoother stop
-      setTimeout(() => stopVisualizer(), 300);
+      // keep visualizer running in paused mode for subtle movement
     }
   }
 });
