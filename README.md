@@ -1,6 +1,6 @@
 # 📻 Retro FM Radio
 
-Retro FM Radio is a single-page web app that mimics a 1970s hi-fi receiver while streaming contemporary stations from 🇸🇬 Singapore.
+[Live Demo](https://radio-seven-jet.vercel.app/) • Retro FM Radio is a single-page web app that mimics a 1970s hi-fi receiver while streaming contemporary stations from 🇸🇬 Singapore.
 
 ## 📑 Table of Contents
 - [✨ Features](#-features)
